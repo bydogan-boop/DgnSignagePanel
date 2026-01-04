@@ -1,0 +1,16 @@
+# Backend gereksizleri
+uploads/
+var/
+*.log
+nohup.out
+.env
+
+# Frontend gereksizleri
+frontend/node_modules/
+frontend/dist/
+frontend/.nuxt/
+frontend/.output/
+frontend/.env
+
+# Diğer
+*.zip
