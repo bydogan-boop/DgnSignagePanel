@@ -113,25 +113,44 @@ func corsHandler(next http.Handler) http.Handler {
 }
 
 func authMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		if token != "1211" {
-			http.Error(w, "Yetkisiz erişim!", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        
+        var dbPassword string
+        // Her istekte güncel şifreyi kontrol et
+        err := DB.QueryRow("SELECT password FROM konsol LIMIT 1").Scan(&dbPassword)
+
+        if err != nil || token != dbPassword {
+            http.Error(w, "Yetkisiz erişim!", http.StatusUnauthorized)
+            return
+        }
+        next.ServeHTTP(w, r)
+    })
 }
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
-	var creds struct{ Password string `json:"password"` }
-	json.NewDecoder(r.Body).Decode(&creds)
-	if creds.Password == "1211" {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, `{"token": "1211"}`)
-	} else {
-		http.Error(w, "Hatalı Şifre", http.StatusUnauthorized)
-	}
+    var creds struct {
+        Password string `json:"password"`
+    }
+    
+    if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+        http.Error(w, "Geçersiz istek", http.StatusBadRequest)
+        return
+    }
+
+    var dbPassword string
+    // konsol tablosundaki ilk (ve tek) şifreyi çekiyoruz
+    err := DB.QueryRow("SELECT password FROM konsol LIMIT 1").Scan(&dbPassword)
+    
+    if err != nil || dbPassword != creds.Password {
+        http.Error(w, "Hatalı şifre", http.StatusUnauthorized)
+        return
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(map[string]string{
+        "token": dbPassword,
+    })
 }
 
 // --- API İşleyicileri (Handlers) ---
