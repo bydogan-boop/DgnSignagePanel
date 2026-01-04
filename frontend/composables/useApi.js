@@ -1,31 +1,30 @@
 export const useApi = () => {
   const fetchWithAuth = async (url, options = {}) => {
-    // login.vue'daki isimle aynı: 'auth_token'
     const token = localStorage.getItem('auth_token');
     
-    // Header hazırlığı
-    const headers = {
-      ...options.headers,
-      'Content-Type': 'application/json'
-    };
+    // Header'ları kopyala
+    const headers = { ...options.headers };
 
-    // Eğer token varsa Bearer formatında ekle
+    // EĞER body bir FormData İSE: 
+    // Tarayıcının "boundary" değerini kendisinin eklemesi için 
+    // Content-Type başlığını tamamen SİLMELİYİZ.
+    if (options.body instanceof FormData) {
+      delete headers['Content-Type'];
+    } else if (!headers['Content-Type']) {
+      // Eğer FormData değilse ve manuel atanmamışsa varsayılan JSON yap
+      headers['Content-Type'] = 'application/json';
+    }
+
+    // Token ekle
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
     const response = await fetch(url, { ...options, headers });
 
-    // 401 hatası gelirse ve şu an login sayfasında değilsek yönlendir
-    // Ama önce konsola yaz ki döngüyü görelim
     if (response.status === 401 && !url.includes('/api/login')) {
-      console.warn("401 Hatası: Token sunucu tarafından reddedildi!");
-      
-      // SADECE Dashboard veya veri sayfalarındaysan login'e at
-      if (window.location.pathname !== '/login') {
-        localStorage.removeItem('auth_token');
-        navigateTo('/login');
-      }
+      localStorage.removeItem('auth_token');
+      navigateTo('/login');
     }
 
     return response;

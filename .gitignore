@@ -1,16 +1,25 @@
-# Backend gereksizleri
-uploads/
+# Backend (Go)
+main                # Derlenmiş ana dosya
+bin/                # Binary dosyaların olduğu klasör
+uploads/            # Kullanıcı yüklemeleri (sunucuda kalmalı, Git'e girmemeli)
 var/
-*.log
-nohup.out
+*.log               # Hata kayıtları
+nohup.out           # Arka planda çalıştırma çıktıları
+.env                # Gizli şifreler (Çok Kritik!)
+
+# Frontend (Nuxt/Node)
+node_modules/
+dist/
+.nuxt/
+.output/
 .env
 
-# Frontend gereksizleri
-frontend/node_modules/
-frontend/dist/
-frontend/.nuxt/
-frontend/.output/
-frontend/.env
+# Sistem ve Editör
+.DS_Store           # Mac OS özel dosyası
+.idea/              # JetBrains editör ayarları
+.vscode/            # VS Code ayarları
+.idx/               # Google IDX özel ayarları
 
 # Diğer
 *.zip
+*.tar.gz

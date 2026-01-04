@@ -1,0 +1,4 @@
+2026/01/02 14:43:17 Veritabanına bağlanılıyor: Host=217.154.14.140, Veritabanı=signage_vu
+2026/01/02 14:43:17 Veritabanı bağlantısı başarılı.
+2026/01/02 14:43:17 Sunucu :8081 portunda başlatıldı
+2026/01/02 14:43:17 listen tcp :8081: bind: address already in use

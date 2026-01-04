@@ -110,11 +110,10 @@ const handleSubmit = async () => {
     const url = isEditMode.value ? `/api/screens/${props.screenToEdit.id}` : '/api/screens';
     
     const response = await fetchWithAuth(url, {
-      method: 'POST',
-      body: formData,
-      // ÖNEMLİ: FormData gönderirken Content-Type header'ını silmeliyiz ki tarayıcı otomatik ayarlasın
-      headers: { 'Content-Type': 'DELETE' } 
-    });
+    method: 'POST', 
+    body: formData
+
+  });
 
     if (!response.ok) throw new Error('Sunucu hatası');
 

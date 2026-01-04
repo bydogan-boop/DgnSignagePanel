@@ -30,11 +30,11 @@
             <td class="table-cell">
               <div class="w-20 h-12 bg-gray-900 rounded overflow-hidden border border-gray-700 flex items-center justify-center shadow-inner">
                 <img v-if="screen.content_type === 'image' && screen.media_url" 
-                    :src="`/uploads/${screen.media_url}`" 
+                    :src="screen.media_url" 
                     class="w-full h-full object-cover" />
                 
                 <video v-else-if="screen.content_type === 'video' && screen.media_url" 
-                      :src="`/uploads/${screen.media_url}`" 
+                      :src="screen.media_url" 
                       class="w-full h-full object-cover"
                       autoplay 
                       muted 

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings" // Buradaki yorum satırı kaldırıldı ve paket dahil edildi
+	"strings"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -57,11 +57,12 @@ func main() {
 	initDB()
 	defer DB.Close()
 
-	// Arka plan işlerini başlat
-	startStatusChecker()
-	log.Println("Sinyal bekçisi arka planda başlatıldı...")
+    // Arka plan işlerini başlat
+    startStatusChecker()
+    startCleanupTask() // Yeni eklediğimiz temizlik görevlisi
+    log.Println("Sinyal bekçisi ve temizlik görevlisi arka planda başlatıldı...")
 
-	router := mux.NewRouter()
+    router := mux.NewRouter()
 
 	// --- Rotalar (Routes) ---
 
@@ -114,22 +115,27 @@ func corsHandler(next http.Handler) http.Handler {
 
 func authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Başlığı al
 		authHeader := r.Header.Get("Authorization")
 		
-		token := authHeader
-		if strings.HasPrefix(authHeader, "Bearer ") {
-			token = strings.TrimPrefix(authHeader, "Bearer ")
-		}
-		token = strings.TrimSpace(token)
+		// Log: Terminalde ne gördüğümüzü kesinleştirelim
+		fmt.Printf("--- Yeni İstek Geldi ---\n")
+		fmt.Printf("Gelen Header: %s\n", authHeader)
 
-		var dbPassword string
-		err := DB.QueryRow("SELECT password FROM konsol LIMIT 1").Scan(&dbPassword)
-
-		if err != nil || token != strings.TrimSpace(dbPassword) {
-			log.Printf("Yetkisiz Erişim! Gelen: [%s], Beklenen: [%s]", token, dbPassword)
-			http.Error(w, "Yetkisiz erişim!", http.StatusUnauthorized)
+		// Bearer 1211 formatındaki string'den sadece 1211 kısmını al
+		token := strings.TrimSpace(strings.Replace(authHeader, "Bearer", "", 1))
+		
+		// Şifre kontrolü
+		// Not: Eğer .env kullanıyorsan os.Getenv("ADMIN_PASSWORD") yazabilirsin
+		if token != "1211" {
+			fmt.Printf("❌ Reddedildi! Beklenen: 1211, Gelen: [%s]\n", token)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			fmt.Fprint(w, `{"error": "Yetkisiz erişim"}`)
 			return
 		}
+
+		fmt.Printf("✅ Onaylandı!\n")
 		next.ServeHTTP(w, r)
 	})
 }
@@ -288,14 +294,22 @@ func createScreen(w http.ResponseWriter, r *http.Request) {
 func updateScreen(w http.ResponseWriter, r *http.Request) {
     vars := mux.Vars(r)
     id := vars["id"]
-    r.ParseMultipartForm(10 << 20)
+
+    // 1. Form verisini oku
+    err := r.ParseMultipartForm(10 << 20)
+    if err != nil {
+        log.Println("Form ayrıştırma hatası:", err)
+        http.Error(w, "Dosya çok büyük veya geçersiz", http.StatusBadRequest)
+        return
+    }
 
     resID := r.FormValue("restaurant_id")
-    screenCode := r.FormValue("screen_code")
-    contentType := r.FormValue("content_type")
-    now := time.Now().UnixNano()
-    versionHash := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%d", now))))
+	screenCode := r.FormValue("screen_code")
+	contentType := r.FormValue("content_type")
+	now := time.Now().UnixNano()
+	versionHash := fmt.Sprintf("%x", md5.Sum([]byte(fmt.Sprintf("%d", now))))
 
+    // 2. Dosya kontrolü (Yeni dosya seçilmiş mi?)
     var mediaUpdateQuery string
     var args []interface{}
     args = append(args, resID, screenCode, contentType, versionHash)
@@ -305,21 +319,34 @@ func updateScreen(w http.ResponseWriter, r *http.Request) {
         defer file.Close()
         fileName := fmt.Sprintf("%d-%s", now, handler.Filename)
         filePath := filepath.Join("./uploads", fileName)
-        dst, _ := os.Create(filePath)
-        defer dst.Close()
-        io.Copy(dst, file)
-        mediaUpdateQuery = ", media_url = ?"
-        args = append(args, fileName)
+        
+        dst, err := os.Create(filePath)
+        if err != nil {
+            log.Println("Dosya oluşturma hatası:", err)
+        } else {
+            defer dst.Close()
+            io.Copy(dst, file)
+            // Veritabanına /uploads/ ön ekiyle kaydediyoruz (sistemine uyum sağlamak için)
+            mediaUpdateQuery = ", media_url = ?"
+            args = append(args, "/uploads/"+fileName)
+        }
     }
 
+    // 3. SQL Sorgusu (ID'yi en sona ekliyoruz)
     args = append(args, id)
+    // SQL sorgusunda tırnaklara ve virgüllere dikkat
     sqlQuery := fmt.Sprintf("UPDATE screens SET restaurant_id = ?, screen_code = ?, content_type = ?, version_hash = ? %s WHERE id = ?", mediaUpdateQuery)
+    
     _, err = DB.Exec(sqlQuery, args...)
     if err != nil {
-        http.Error(w, "Güncelleme hatası", http.StatusInternalServerError)
+        log.Printf("SQL Güncelleme Hatası (ID: %s): %v", id, err)
+        http.Error(w, "Veritabanı güncelleme hatası: "+err.Error(), http.StatusInternalServerError)
         return
     }
-    w.WriteHeader(http.StatusOK)
+
+    log.Printf("✅ Ekran başarıyla güncellendi: ID %s", id)
+    w.Header().Set("Content-Type", "application/json")
+    fmt.Fprint(w, `{"message": "Ekran güncellendi"}`)
 }
 
 func deleteScreen(w http.ResponseWriter, r *http.Request) {
@@ -489,4 +516,52 @@ func initDB() {
 		log.Fatalf("❌ Veritabanı hatası: %v", err)
 	}
 	log.Println("✅ Veritabanı bağlantısı başarılı.")
+}
+
+func startCleanupTask() {
+	go func() {
+		for {
+			// Her 24 saatte bir çalışsın
+			time.Sleep(24 * time.Hour)
+			log.Println("🧹 Gereksiz dosyalar için temizlik başlatılıyor...")
+
+			// 1. Veritabanındaki tüm aktif medya dosyalarını al
+			rows, err := DB.Query("SELECT media_url FROM screens UNION SELECT logo_url FROM restaurants")
+			if err != nil {
+				log.Println("Temizlik hatası (DB):", err)
+				continue
+			}
+
+			activeFiles := make(map[string]bool)
+			for rows.Next() {
+				var fileName string
+				if err := rows.Scan(&fileName); err == nil && fileName != "" {
+					// Sadece dosya adını alıyoruz (eğer path ile kayıtlıysa temizliyoruz)
+					activeFiles[filepath.Base(fileName)] = true
+				}
+			}
+			rows.Close()
+
+			// 2. Uploads klasöründeki dosyaları tara
+			files, err := os.ReadDir("./uploads")
+			if err != nil {
+				log.Println("Temizlik hatası (Klasör):", err)
+				continue
+			}
+
+			for _, file := range files {
+				if file.IsDir() {
+					continue
+				}
+				// Eğer dosya veritabanında yoksa sil
+				if !activeFiles[file.Name()] {
+					err := os.Remove(filepath.Join("./uploads", file.Name()))
+					if err == nil {
+						log.Printf("🗑️ Silindi: %s", file.Name())
+					}
+				}
+			}
+			log.Println("✅ Temizlik tamamlandı.")
+		}
+	}()
 }
