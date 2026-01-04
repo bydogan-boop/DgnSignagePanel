@@ -30,11 +30,11 @@
             <td class="table-cell">
               <div class="w-20 h-12 bg-gray-900 rounded overflow-hidden border border-gray-700 flex items-center justify-center shadow-inner">
                 <img v-if="screen.content_type === 'image' && screen.media_url" 
-                    :src="screen.media_url" 
+                    :src="`/uploads/${screen.media_url}`" 
                     class="w-full h-full object-cover" />
                 
                 <video v-else-if="screen.content_type === 'video' && screen.media_url" 
-                      :src="screen.media_url" 
+                      :src="`/uploads/${screen.media_url}`" 
                       class="w-full h-full object-cover"
                       autoplay 
                       muted 
@@ -101,6 +101,13 @@ async function fetchScreens() {
   loading.value = true;
   try {
     const response = await fetchWithAuth('/api/screens');
+    
+    // Eğer 401 hatası gelirse giriş sayfasına at
+    if (response.status === 401) {
+      console.error("Yetki hatası! Login'e yönlendiriliyor.");
+      return navigateTo('/login');
+    }
+
     if (!response.ok) throw new Error('Ekranlar yüklenemedi');
     screens.value = await response.json();
   } catch (error) {
@@ -123,16 +130,17 @@ async function deleteScreen(id) {
 function formatLastSeen(lastSeen) {
   if (!lastSeen || !lastSeen.Valid) return '-';
   const date = new Date(lastSeen.Time);
-  // Daha kısa ve okunur bir tarih formatı
   return date.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) + ' ' + date.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' });
 }
 
 function openCreateModal() {
+  console.log("Ekleme modalı açılıyor...");
   selectedScreen.value = null;
   isModalOpen.value = true;
 }
 
 function openEditModal(screen) {
+  console.log("Düzenleme modalı açılıyor:", screen.screen_code);
   selectedScreen.value = screen;
   isModalOpen.value = true;
 }
