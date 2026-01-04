@@ -95,24 +95,24 @@ const restaurant = ref(null);
 const loading = ref(true);
 const error = ref(null);
 
+// Şifreli API fonksiyonunu çekiyoruz
+const { fetchWithAuth } = useApi();
+
 async function fetchRestaurantDetail() {
   const id = route.params.id;
   loading.value = true;
   error.value = null;
 
   try {
-    // 127.0.0.1:8081'e gitmesi için nuxt.config proxy'si devrede olmalı
-    const response = await fetch(`/api/restaurants/${id}`);
+    // Normal fetch yerine fetchWithAuth kullandık
+    const response = await fetchWithAuth(`/api/restaurants/${id}`);
     
     if (!response.ok) {
-      throw new Error(`Sunucu hatası: ${response.status}. Lütfen backend'i kontrol edin.`);
+      throw new Error(`Sunucu hatası: ${response.status}. Lütfen girişi kontrol edin.`);
     }
 
     const data = await response.json();
 
-    // Go'dan gelen veriyi güvenli bir yapıya oturtalım
-    // Eğer Go tarafı "restaurant" ve "screens" olarak ikiye ayırmışsa direkt al
-    // Ayırmamışsa, gelen veriyi bu yapıya biz sokalım
     if (data.restaurant) {
       restaurant.value = data;
     } else {
@@ -136,7 +136,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-/* Aspect ratio desteği olmayan tarayıcılar için yedek */
 .aspect-video {
   aspect-ratio: 16 / 9;
 }

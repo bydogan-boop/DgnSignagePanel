@@ -12,14 +12,12 @@
 
       <form @submit.prevent="handleSubmit">
         <div class="space-y-6">
-          <!-- Restoran Adı -->
           <div>
             <label for="restaurant_name" class="form-label">Restoran Adı</label>
             <input type="text" id="restaurant_name" v-model="form.name" required class="form-input">
           </div>
         </div>
 
-        <!-- Butonlar -->
         <div class="mt-8 flex justify-end space-x-4">
           <button type="button" @click="close" class="btn btn-secondary">İptal</button>
           <button type="submit" :disabled="isSubmitting" class="btn btn-primary disabled:opacity-50">
@@ -40,6 +38,9 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['update:modelValue', 'saved']);
+
+// 1. Şifreli API aracını içeri al
+const { fetchWithAuth } = useApi();
 
 const form = ref({ name: '' });
 const isSubmitting = ref(false);
@@ -63,17 +64,17 @@ const handleSubmit = async () => {
 
   try {
     const url = isEditMode.value ? `/api/restaurants/${props.restaurantToEdit.id}` : '/api/restaurants';
-    const method = isEditMode.value ? 'PUT' : 'POST';
-
-    const response = await fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json' },
+    
+    // 2. Go tarafı POST beklediği için ikisini de POST yapıyoruz (veya Go route'a göre method seçin)
+    // Şifreli fetch kullanıyoruz
+    const response = await fetchWithAuth(url, {
+      method: 'POST',
       body: JSON.stringify({ name: form.value.name }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Bir hata oluştu.');
+      const errorText = await response.text();
+      throw new Error(errorText || 'Bir hata oluştu.');
     }
 
     emit('saved');

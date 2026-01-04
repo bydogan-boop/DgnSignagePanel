@@ -1,6 +1,5 @@
 <template>
   <div class="container mx-auto p-4 md:p-6">
-    <!-- Sayfa Başlığı ve Eylem Butonu -->
     <div class="flex justify-between items-center mb-6">
       <h1 class="page-title">Tüm Restoranlar</h1>
       <button @click="openModal()" class="btn btn-primary">
@@ -11,13 +10,11 @@
       </button>
     </div>
 
-    <!-- Yüklenme ve Boş Durum Göstergeleri -->
     <div v-if="loading" class="text-center py-10 text-gray-400">Yükleniyor...</div>
     <div v-else-if="!loading && restaurants.length === 0" class="text-center py-10 text-gray-400 bg-gray-800 rounded-2xl">
       Gösterilecek restoran bulunmuyor.
     </div>
 
-    <!-- Restoran Tablosu -->
     <div v-else class="table-wrapper overflow-x-auto">
         <table class="min-w-full">
             <thead>
@@ -59,7 +56,6 @@
         </table>
     </div>
 
-    <!-- Modal (Değişiklik Yok) -->
     <div v-if="showModal" class="modal-backdrop flex items-center justify-center" @click.self="closeModal">
       <div class="modal-card m-4">
         <div class="p-6">
@@ -95,19 +91,19 @@
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+
+// Şifreli API kullanımı için composable'ı dahil ediyoruz
+const { fetchWithAuth } = useApi();
 
 const restaurants = ref([]);
 const loading = ref(true);
 const showModal = ref(false);
 const isSaving = ref(false);
-const router = useRouter();
 
 const initialFormState = {
   id: null,
@@ -122,7 +118,8 @@ const logoPreview = ref(null);
 async function fetchRestaurants() {
   loading.value = true;
   try {
-    const response = await fetch('/api/restaurants/status');
+    // fetch yerine fetchWithAuth kullanıldı
+    const response = await fetchWithAuth('/api/restaurants/status');
     if (!response.ok) throw new Error('Restoranlar alınamadı');
     restaurants.value = await response.json();
   } catch (error) { 
@@ -163,8 +160,6 @@ function closeModal() {
   showModal.value = false;
   Object.assign(form.value, initialFormState);
   logoPreview.value = null;
-  const fileInput = document.querySelector('input[type="file"]');
-  if(fileInput) fileInput.value = '';
 }
 
 async function saveRestaurant() {
@@ -172,21 +167,22 @@ async function saveRestaurant() {
 
   const formData = new FormData();
   formData.append('name', form.value.name);
-  formData.append('phone', form.value.phone);
-  formData.append('address', form.value.address);
+  formData.append('phone', form.value.phone || '');
+  formData.append('address', form.value.address || '');
   if (form.value.logo instanceof File) {
     formData.append('logo', form.value.logo);
   }
 
   const isUpdating = !!form.value.id;
+  // Güncelleme için de POST kullanıyoruz (Go tarafındaki router'a uygun olarak)
   const url = isUpdating ? `/api/restaurants/${form.value.id}` : '/api/restaurants';
-  const method = isUpdating ? 'PUT' : 'POST';
-
+  
   try {
-    const response = await fetch(url, { method, body: formData });
+    // fetch yerine fetchWithAuth kullanıldı
+    const response = await fetchWithAuth(url, { method: 'POST', body: formData });
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `Restoran ${isUpdating ? 'güncellenemedi' : 'oluşturulamadı'}.`);
+      const errorMsg = await response.text();
+      throw new Error(errorMsg || "İşlem başarısız.");
     }
     
     await fetchRestaurants();
@@ -201,22 +197,21 @@ async function saveRestaurant() {
 }
 
 async function confirmDelete(id) {
-  if (!confirm('Bu restoranı ve ilişkili tüm verileri (ekranlar, logolar vb.) kalıcı olarak silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.')) {
-    return;
-  }
+  if (!confirm('Bu restoranı ve bağlı tüm ekranları silmek istediğinize emin misiniz?')) return;
+
   try {
-    const response = await fetch(`/api/restaurants/${id}`, { method: 'DELETE' });
+    // fetch yerine fetchWithAuth kullanıldı
+    const response = await fetchWithAuth(`/api/restaurants/${id}`, { method: 'DELETE' });
     if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.message || 'Restoran silinemedi.');
+        const err = await response.text();
+        throw new Error(err || 'Restoran silinemedi.');
     }
     await fetchRestaurants();
   } catch (error) {
-    console.error('Restoran silinirken bir hata oluştu:', error);
+    console.error('Silme hatası:', error);
     alert(`Hata: ${error.message}`);
   }
 }
 
 onMounted(fetchRestaurants);
-
 </script>

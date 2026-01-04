@@ -83,6 +83,9 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 
+// Şifreli fetch fonksiyonumuzu çağırıyoruz
+const { fetchWithAuth } = useApi();
+
 const stats = ref({});
 const restaurantStatus = ref([]);
 const recentScreens = ref([]);
@@ -93,8 +96,9 @@ async function fetchData() {
   loading.value = true;
   error.value = null;
   try {
-    const response = await fetch('/api/dashboard');
-    if (!response.ok) throw new Error('Veriler alınamadı.');
+    // Standart fetch yerine fetchWithAuth kullanıyoruz
+    const response = await fetchWithAuth('/api/dashboard');
+    if (!response.ok) throw new Error('Veriler alınamadı. Lütfen giriş yapın.');
     const data = await response.json();
 
     stats.value = {
@@ -107,7 +111,7 @@ async function fetchData() {
 
   } catch (err) {
     console.error("Dashboard hatası:", err);
-    error.value = "Veriler yüklenirken bir hata oluştu.";
+    error.value = err.message || "Veriler yüklenirken bir hata oluştu.";
   } finally {
     loading.value = false;
   }
